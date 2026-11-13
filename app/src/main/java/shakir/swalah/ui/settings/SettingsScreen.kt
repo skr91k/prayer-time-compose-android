@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.HorizontalDivider
@@ -29,12 +30,15 @@ import shakir.swalah.data.SettingsStore
 import shakir.swalah.data.ThirdOfNight
 import shakir.swalah.reminder.ReminderStore
 import shakir.swalah.ui.Routes
+import shakir.swalah.ui.openInBrowser
 import shakir.swalah.ui.common.AppIcons
 import shakir.swalah.ui.common.AppScaffold
 import shakir.swalah.ui.common.ChoiceDialog
 import shakir.swalah.ui.common.ReliabilityCard
 import shakir.swalah.ui.common.SectionTitle
 import shakir.swalah.ui.common.SettingItem
+
+private const val CONTACT_URL = "https://utilitykit.web.app/contactus?id=adhan4"
 
 @Composable
 fun SettingsScreen(resumeTick: Int, onBack: () -> Unit, onOpen: (String) -> Unit) {
@@ -85,6 +89,9 @@ fun SettingsScreen(resumeTick: Int, onBack: () -> Unit, onOpen: (String) -> Unit
                 val share = Intent(Intent.ACTION_SEND).setType("text/plain")
                     .putExtra(Intent.EXTRA_TEXT, " أَذَان ‎ Lite \nPrayer Time and Notifications,  Qibla: \n$link")
                 context.startActivity(Intent.createChooser(share, "Share via"))
+            })
+            SettingItem("Contact us", "Questions, suggestions, problems", icon = Icons.Default.Email, onClick = {
+                openInBrowser(context, CONTACT_URL)
             })
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             SettingItem("Version", BuildConfig.VERSION_NAME, icon = Icons.Default.Info)
