@@ -1,0 +1,4 @@
+# Copy to api.properties (git-ignored) and fill in.
+# API servers, tried in order (plain HTTP is allowed for these hosts only), and the API secret.
+api.servers=http://203.0.113.10:8000,http://198.51.100.20:8000
+api.secret=change-me
