@@ -49,9 +49,9 @@ android {
         applicationId = "shakir.swalah"
         minSdk = 26
         targetSdk = 36
-        // Legacy app ended at 159 / 2.8.7; versionCode follows the version (4.0.2 -> 402).
-        versionCode = 402
-        versionName = "4.0.2"
+        // Legacy app ended at 159 / 2.8.7; versionCode follows the version (4.0.3 -> 403).
+        versionCode = 403
+        versionName = "4.0.3"
         buildConfigField("String", "API_SERVERS", "\"${apiServers.joinToString(",")}\"")
         buildConfigField("String", "API_SECRET", "\"$apiSecret\"")
     }
