@@ -16,6 +16,8 @@ object Sounds {
     const val ALERT = "panic"
     const val SIGNAL = "signal"
     const val VOYAGER = "voyager"
+    /** Stored as the reminder's sound: notification (and vibration) only, no audio. */
+    const val SILENT = "silent"
 
     val builtIns = listOf(
         BuiltIn(ADHAN, "Adhan"),
@@ -36,6 +38,7 @@ object Sounds {
 
     fun title(context: Context, uri: String?): String {
         if (uri == null) return "Default alarm sound"
+        if (uri == SILENT) return "Silent (no sound)"
         builtIns.firstOrNull { uri == rawUri(context, it.rawName) }?.let { return it.title }
         val parsed = Uri.parse(uri)
         if (parsed.scheme == "file") return parsed.lastPathSegment?.substringBeforeLast('.') ?: "Audio file"

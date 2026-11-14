@@ -80,6 +80,10 @@ fun SoundPickerDialog(current: String?, onDismiss: () -> Unit, onPick: (String?)
         title = { Text("Sound") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
+                SoundRow("Silent (no sound)", selected == Sounds.SILENT) {
+                    preview.stop()
+                    selected = Sounds.SILENT
+                }
                 Sounds.builtIns.forEach { sound ->
                     val uri = Sounds.rawUri(context, sound.rawName)
                     SoundRow(sound.title, selected == uri) {
@@ -100,7 +104,8 @@ fun SoundPickerDialog(current: String?, onDismiss: () -> Unit, onPick: (String?)
                 }
                 netStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 val custom = selected?.takeIf { s ->
-                    Sounds.builtIns.none { Sounds.rawUri(context, it.rawName) == s } && downloaded.none { Uri.fromFile(it).toString() == s }
+                    s != Sounds.SILENT &&
+                        Sounds.builtIns.none { Sounds.rawUri(context, it.rawName) == s } && downloaded.none { Uri.fromFile(it).toString() == s }
                 }
                 if (custom != null) SoundRow(Sounds.title(context, custom), true) { preview.play(custom) }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))

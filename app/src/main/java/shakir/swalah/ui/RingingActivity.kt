@@ -146,7 +146,9 @@ private fun RingingScreen(dismissId: Int?, onFinished: () -> Unit) {
             lastRinging = ringing
             stopped = null
         } else {
-            if (lastRinging == null) delay(3_000)
+            // Opened (e.g. from the notification) after a short sound already ended: don't sit on a
+            // blank screen - a brief grace in case the service is just starting, then close.
+            if (lastRinging == null) delay(300)
             if (AlarmService.ringing.value != null) return@LaunchedEffect
             val last = lastRinging
             if (last == null || handled || last.preview) return@LaunchedEffect onFinished()

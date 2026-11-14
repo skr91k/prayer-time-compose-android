@@ -50,6 +50,13 @@ class AlarmSound(private val context: Context) {
     fun start(ringtoneUri: String?, vibrate: Boolean, loop: Boolean, maxVolume: Boolean, onFinished: () -> Unit = {}) {
         this.loop = loop
         this.onFinished = onFinished
+        if (ringtoneUri == shakir.swalah.reminder.Sounds.SILENT) {
+            // Silent reminder: only the notification / screen and (optionally) vibration.
+            EventLog.log(context, "sound: silent")
+            if (vibrate) startVibration()
+            if (!loop) handler.postDelayed({ onFinished() }, SILENT_PLAY_ONCE_MS)
+            return
+        }
         adjustVolume(maxVolume)
         val candidates = listOfNotNull(
             ringtoneUri?.let(Uri::parse),
@@ -193,5 +200,7 @@ class AlarmSound(private val context: Context) {
 
     private companion object {
         const val TAG = "PrayerAlarm"
+        /** How long a silent play-once reminder keeps its live notification. */
+        const val SILENT_PLAY_ONCE_MS = 5_000L
     }
 }
