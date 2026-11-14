@@ -71,13 +71,13 @@ android {
         debug {
             // Installs next to the Play Store app (which Play re-signs with its own key).
             applicationIdSuffix = ".debug"
-            resValue("string", "app_name", "أَذَان Debug")
+            resValue("string", "app_name", "Adhan أذان")
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            resValue("string", "app_name", "أَذَان")
+            resValue("string", "app_name", "Adhan أذان")
             signingConfig = signingConfigs.findByName("upload")
         }
     }
