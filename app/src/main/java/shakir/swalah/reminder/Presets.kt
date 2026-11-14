@@ -9,7 +9,9 @@ import shakir.swalah.prayer.Prayer
  *  - Jumua: Dhuhr - 1 h on Fridays: off
  *  - iqama alarms (Fajr/Dhuhr/Asr/Isha +20, Maghrib +5): on
  *  - Ishraq (Shurooq + 10 min), Tahajjud (Fajr - 30 min) and Suhoor (Fajr - 1 h): off
- * Every one plays its sound once and then dismisses itself (no snooze, no math).
+ *  - "Get ready for work": fixed 8:00 every day, a wake-up alarm (rings until dismissed,
+ *    snooze 5 min, auto-snooze after 1 min, ringing screen): off
+ * The others play their sound once and then dismiss themselves (no snooze, no math).
  * Iqama alarms keep their own offset; they don't follow the iqama countdown settings.
  */
 object Presets {
@@ -93,6 +95,19 @@ object Presets {
             autoStopSeconds = Reminder.PLAY_ONCE,
             preset = "suhoor",
         )
-        return adhans + jumua + iqamas + ishraq + tahajjud + suhoor
+        val work = Reminder(
+            label = "Get ready for work",
+            base = TimeBase.FIXED,
+            hour = 8,
+            minute = 0,
+            ringtoneUri = Sounds.rawUri(context, Sounds.ALERT),
+            enabled = false,
+            fullScreen = true,
+            autoStopSeconds = 0,
+            snoozeMinutes = 5,
+            autoSnoozeSeconds = 60,
+            preset = "work",
+        )
+        return adhans + jumua + iqamas + ishraq + tahajjud + suhoor + work
     }
 }

@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray
+import shakir.swalah.alarm.ReminderScheduler
 
 /**
  * Reminders live in device-protected storage so they can ring right after a reboot,
@@ -16,6 +17,7 @@ object ReminderStore {
     private const val KEY_NEXT_ID = "next_id"
     private const val KEY_SEEDED = "seeded_v1"
     private const val KEY_PRESETS_SEEN = "presets_seen"
+    private const val KEY_RESET = "reset_v3"
 
     private val _version = MutableStateFlow(0)
     /** Bumped on every write so the UI can refresh. */
@@ -39,6 +41,7 @@ object ReminderStore {
      */
     @Synchronized
     fun seedIfNeeded(context: Context) {
+        resetIfNeeded(context)
         val p = prefs(context)
         val seen = p.getStringSet(KEY_PRESETS_SEEN, null)
             // Installs from before this key existed had every preset of that time.
@@ -47,6 +50,19 @@ object ReminderStore {
         if (fresh.isEmpty() && p.contains(KEY_PRESETS_SEEN)) return
         fresh.forEach { upsert(context, it) }
         p.edit().putStringSet(KEY_PRESETS_SEEN, seen + fresh.mapNotNull { it.preset }).putBoolean(KEY_SEEDED, true).commit()
+    }
+
+    /**
+     * One-time wipe of every saved reminder (built-in and user-made) so all installs start again
+     * from the defaults. Bump [KEY_RESET] (v4, ...) to wipe again in a later version.
+     */
+    private fun resetIfNeeded(context: Context) {
+        val p = prefs(context)
+        if (p.getBoolean(KEY_RESET, false)) return
+        // Old alarms are keyed by reminder id; cancel them before the ids are forgotten.
+        all(context).forEach { ReminderScheduler.cancel(context, it.id) }
+        p.edit().clear().putBoolean(KEY_RESET, true).commit()
+        _version.value++
     }
 
     /** Adds back any built-in reminder the user deleted. Returns how many were added. */
