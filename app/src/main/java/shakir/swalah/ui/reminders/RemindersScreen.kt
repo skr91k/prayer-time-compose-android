@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -71,6 +72,7 @@ import shakir.swalah.reminder.TimeBase
 import shakir.swalah.ui.RingingActivity
 import shakir.swalah.ui.common.AppScaffold
 import shakir.swalah.ui.common.ReliabilityCard
+import shakir.swalah.ui.theme.AppColors
 import shakir.swalah.ui.common.daysLabel
 import shakir.swalah.ui.common.formatDayTime
 import shakir.swalah.ui.common.offsetLabel
@@ -108,6 +110,8 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
     val ringing = ringingState?.takeIf { !it.preview }
     var editing by remember { mutableStateOf<Reminder?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    /** Non-null while the "Restore built-in reminders?" dialog is open: the ones it would add back. */
+    var confirmRestore by remember { mutableStateOf<List<Reminder>?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -140,9 +144,7 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(text = { Text("Restore built-in reminders") }, onClick = {
                         menuOpen = false
-                        val added = ReminderStore.restoreMissingPresets(context)
-                        added.forEach { ReminderController.save(context, it) }
-                        Toast.makeText(context, if (added.isEmpty()) "All built-in reminders are there" else "Restored ${added.size}", Toast.LENGTH_SHORT).show()
+                        confirmRestore = ReminderStore.missingPresets(context)
                     })
                 }
             }
@@ -229,6 +231,34 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
         }
     }
 
+    confirmRestore?.let { missing ->
+        AlertDialog(
+            onDismissRequest = { confirmRestore = null },
+            title = { Text(if (missing.isEmpty()) "Nothing to restore" else "Restore built-in reminders?") },
+            text = {
+                Text(
+                    if (missing.isEmpty()) "All built-in reminders are already in the list."
+                    else "These deleted reminders will be added back with their default settings:\n\n" +
+                        missing.joinToString("\n") { "• " + it.label } +
+                        "\n\nYour other reminders are not changed.",
+                )
+            },
+            confirmButton = {
+                if (missing.isEmpty()) {
+                    TextButton(onClick = { confirmRestore = null }) { Text("OK") }
+                } else {
+                    TextButton(onClick = {
+                        confirmRestore = null
+                        val added = ReminderStore.restoreMissingPresets(context)
+                        added.forEach { ReminderController.save(context, it) }
+                        Toast.makeText(context, "Restored ${added.size}", Toast.LENGTH_SHORT).show()
+                    }) { Text("Restore") }
+                }
+            },
+            dismissButton = { if (missing.isNotEmpty()) TextButton(onClick = { confirmRestore = null }) { Text("Cancel") } },
+        )
+    }
+
     editing?.let { r ->
         ReminderEditor(
             initial = r,
@@ -275,15 +305,23 @@ private fun ReminderRow(
     onClick: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    /** Non-null while the "Restore built-in reminders?" dialog is open: the ones it would add back. */
+    var confirmRestore by remember { mutableStateOf<List<Reminder>?>(null) }
     val next = if (r.enabled) r.nextTrigger(calc, now) else null
     // Big time: when it rings today (prayer-based times move every day).
     val shownTime = when (r.base) {
         TimeBase.FIXED -> format.formatMinuteOfDay(r.hour * 60 + r.minute)
         TimeBase.PRAYER -> r.occurrenceOn(LocalDate.now(), calc)?.let(format::format) ?: "--:--"
     }
+    // Adhan, iqama and other reminders each get their own background.
+    val background = when {
+        r.preset?.startsWith("adhan_") == true -> AppColors.ReminderAdhan
+        r.preset?.startsWith("iqama_") == true -> AppColors.ReminderIqama
+        else -> AppColors.ReminderOther
+    }
     Card(
         modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        colors = CardDefaults.cardColors(containerColor = background),
     ) {
         val dim = if (r.enabled) 1f else 0.45f
         Column(Modifier.padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 16.dp)) {

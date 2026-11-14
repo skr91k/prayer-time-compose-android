@@ -22,6 +22,10 @@ object AppColors {
     /** Old speed-dial main button: colorAccent. */
     val FabAccent = Color(0xFFD81B60)
     val FabMini = Color(0xFF1A1A1A)
+    /** Reminder cards: built-in adhan (and Shurooq), iqama, everything else. */
+    val ReminderAdhan = Color(0xFF34304A)
+    val ReminderIqama = Color(0xFF24393A)
+    val ReminderOther = Color(0xFF35383B)
 }
 
 private val colors = darkColorScheme(

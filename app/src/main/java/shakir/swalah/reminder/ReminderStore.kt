@@ -51,9 +51,12 @@ object ReminderStore {
 
     /** Adds back any built-in reminder the user deleted. Returns how many were added. */
     @Synchronized
-    fun restoreMissingPresets(context: Context): List<Reminder> {
+    fun restoreMissingPresets(context: Context): List<Reminder> = missingPresets(context).map { upsert(context, it) }
+
+    /** Built-in reminders the user has deleted (what "Restore" would add back). */
+    fun missingPresets(context: Context): List<Reminder> {
         val existing = all(context).mapNotNull { it.preset }.toSet()
-        return Presets.all(context).filter { it.preset !in existing }.map { upsert(context, it) }
+        return Presets.all(context).filter { it.preset !in existing }
     }
 
     /** Inserts or replaces. A reminder with id 0 gets a fresh id. */
