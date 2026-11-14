@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -48,12 +50,28 @@ class MainActivity : ComponentActivity() {
     /** Bumped on every resume so screens re-read permission / reliability state. */
     private val resumeTick = mutableIntStateOf(0)
 
+    /** Screen a launcher shortcut asked for (res/xml/shortcuts.xml "route" extra); null once handled. */
+    private val shortcutRoute = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val start = if (SettingsStore.get(this).location == null) Routes.LOCATION_FIRST else Routes.HOME
-        setContent { AdhanTheme { AppNavigation(start, resumeTick.intValue) } }
+        if (savedInstanceState == null) shortcutRoute.value = intent.shortcutRoute()
+        setContent {
+            AdhanTheme {
+                AppNavigation(start, resumeTick.intValue, shortcutRoute.value) { shortcutRoute.value = null }
+            }
+        }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.shortcutRoute()?.let { shortcutRoute.value = it }
+    }
+
+    private fun Intent.shortcutRoute(): String? =
+        getStringExtra(EXTRA_ROUTE)?.takeIf { it == Routes.QIBLA || it == Routes.REMINDERS }
 
     override fun onResume() {
         super.onResume()
@@ -70,6 +88,10 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Like the old app: a volume key stops a playing adhan. */
+    companion object {
+        const val EXTRA_ROUTE = "route"
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
             AlarmService.stopIfNotWakeUp(this)
@@ -79,9 +101,19 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AppNavigation(start: String, resumeTick: Int) {
+private fun AppNavigation(start: String, resumeTick: Int, shortcutRoute: String?, onShortcutHandled: () -> Unit) {
     val nav = rememberNavController()
     val context = LocalContext.current
+    // Shortcut: open the screen on top of Home (so Back lands on Home). Ignored until a location is set.
+    LaunchedEffect(shortcutRoute) {
+        val route = shortcutRoute ?: return@LaunchedEffect
+        onShortcutHandled()
+        if (nav.currentDestination?.route == Routes.LOCATION_FIRST) return@LaunchedEffect
+        nav.navigate(route) {
+            popUpTo(Routes.HOME)
+            launchSingleTop = true
+        }
+    }
     NavHost(navController = nav, startDestination = start) {
         composable(Routes.HOME) {
             HomeScreen(

@@ -46,6 +46,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Spelling aliases (Adhan, Azan, اذان...) so launcher search finds the app. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- Ringing screen: shows over the lock screen and works before first unlock after a reboot. -->

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spellings people type into launcher search; used as shortcut labels so search finds the app. -->
+<resources>
+    <string name="alias_qibla" translatable="false">Qibla</string>
+    <string name="alias_reminder" translatable="false">Reminder</string>
+    <string name="alias_adhan" translatable="false">Adhan</string>
+    <string name="alias_azan" translatable="false">Azan</string>
+    <string name="alias_athan" translatable="false">Athan</string>
+    <string name="alias_adan" translatable="false">Adan</string>
+    <string name="alias_ar_hamza" translatable="false">أذان</string>
+    <string name="alias_ar_plain" translatable="false">اذان</string>
+    <string name="alias_qibla_ar" translatable="false">قبلة</string>
+    <string name="alias_reminder_ar" translatable="false">تذكير</string>
+</resources>
