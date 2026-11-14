@@ -313,8 +313,9 @@ private fun ReminderRow(
         TimeBase.FIXED -> format.formatMinuteOfDay(r.hour * 60 + r.minute)
         TimeBase.PRAYER -> r.occurrenceOn(LocalDate.now(), calc)?.let(format::format) ?: "--:--"
     }
-    // Adhan, iqama and other reminders each get their own background.
+    // Adhan, iqama and other reminders each get their own background (Shurooq counts as "other").
     val background = when {
+        r.preset == "adhan_SUNRISE" -> AppColors.ReminderOther
         r.preset?.startsWith("adhan_") == true -> AppColors.ReminderAdhan
         r.preset?.startsWith("iqama_") == true -> AppColors.ReminderIqama
         else -> AppColors.ReminderOther
