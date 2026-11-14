@@ -104,20 +104,27 @@ fun SoundPickerDialog(current: String?, onDismiss: () -> Unit, onPick: (String?)
                 }
                 if (custom != null) SoundRow(Sounds.title(context, custom), true) { preview.play(custom) }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                TextButton(onClick = {
-                    preview.stop()
-                    systemPicker.launch(
-                        Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
-                            .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
-                            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-                            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
-                            .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Reminder sound")
-                            .putExtra(
-                                RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
-                                selected?.let(Uri::parse) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
-                            ),
-                    )
-                }) { Text("System alarm sounds…") }
+                // One entry per system category: the system picker shows a single type at a time.
+                listOf(
+                    RingtoneManager.TYPE_ALARM to "System alarm sounds…",
+                    RingtoneManager.TYPE_NOTIFICATION to "System notification sounds…",
+                    RingtoneManager.TYPE_RINGTONE to "System ringtones…",
+                ).forEach { (type, title) ->
+                    TextButton(onClick = {
+                        preview.stop()
+                        systemPicker.launch(
+                            Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
+                                .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, type)
+                                .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                                .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, false)
+                                .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Reminder sound")
+                                .putExtra(
+                                    RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                                    selected?.let(Uri::parse) ?: RingtoneManager.getDefaultUri(type),
+                                ),
+                        )
+                    }) { Text(title) }
+                }
                 TextButton(onClick = { preview.stop(); filePicker.launch(arrayOf("audio/*")) }) { Text("Audio file from phone…") }
             }
         },
