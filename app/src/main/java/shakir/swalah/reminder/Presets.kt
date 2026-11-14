@@ -25,8 +25,8 @@ object Presets {
             Reminder(
                 label = p.arabic,
                 prayer = p,
-                // Fajr gets the full adhan; the others keep the app's short tone, as before.
-                ringtoneUri = Sounds.rawUri(context, if (p == Prayer.FAJR) Sounds.ADHAN else Sounds.TONE),
+                // Fajr gets the full adhan; the other adhans (and Shurooq) the short "Signal" tone.
+                ringtoneUri = Sounds.rawUri(context, if (p == Prayer.FAJR) Sounds.ADHAN else Sounds.SIGNAL),
                 // Shurooq is not a prayer: off unless turned on.
                 enabled = p != Prayer.SUNRISE,
                 // Fajr opens the ringing screen (often asleep); the others stay a heads-up notification.
@@ -43,7 +43,7 @@ object Presets {
             prayer = Prayer.DHUHR,
             offsetMinutes = -60,
             days = FRIDAY,
-            ringtoneUri = Sounds.rawUri(context, Sounds.TONE),
+            ringtoneUri = Sounds.rawUri(context, Sounds.SIGNAL),
             enabled = false,
             fullScreen = false,
             vibrate = false,
@@ -55,7 +55,7 @@ object Presets {
                 label = "${p.arabic} (الإقامة)",
                 prayer = p,
                 offsetMinutes = IQAMA_MINUTES.getValue(p),
-                ringtoneUri = Sounds.rawUri(context, Sounds.IQAMA_TONE),
+                ringtoneUri = Sounds.rawUri(context, Sounds.VOYAGER),
                 enabled = true,
                 fullScreen = false,
                 vibrate = false,

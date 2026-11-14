@@ -14,6 +14,8 @@ object Sounds {
     const val IQAMA_TONE = "mixkit_access_allowed_tone_2869"
     const val BEEP = "beep_beep_beep"
     const val ALERT = "panic"
+    const val SIGNAL = "signal"
+    const val VOYAGER = "voyager"
 
     val builtIns = listOf(
         BuiltIn(ADHAN, "Adhan"),
@@ -21,6 +23,8 @@ object Sounds {
         BuiltIn(IQAMA_TONE, "Iqama tone"),
         BuiltIn(BEEP, "Beep beep"),
         BuiltIn(ALERT, "Alert"),
+        BuiltIn(SIGNAL, "Signal"),
+        BuiltIn(VOYAGER, "Voyager"),
     )
 
     /** By name, not R id: ids change between builds, names don't. */
