@@ -127,7 +127,8 @@ class AlarmService : Service() {
             else -> handler.postDelayed(timeout, reminder.autoSnoozeSeconds * 1_000L)
         }
         // Adhan / iqama stay a heads-up notification; wake-up style reminders open the ringing screen.
-        if (reminder.fullScreen || preview) {
+        // A preview behaves exactly like the real thing.
+        if (reminder.fullScreen) {
             try {
                 startActivity(RingingActivity.intent(this))
             } catch (_: Exception) {

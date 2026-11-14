@@ -89,9 +89,14 @@ object Notifications {
             .setAutoCancel(false)
             .setContentIntent(open)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-        if (reminder.fullScreen || preview) builder.setFullScreenIntent(open, true)
+        if (reminder.fullScreen) builder.setFullScreenIntent(open, true)
         when {
-            preview -> builder.addAction(0, "Stop preview", action(context, AlarmActionReceiver.ACTION_STOP_PREVIEW, reminder.id))
+            preview -> {
+                val stop = action(context, AlarmActionReceiver.ACTION_STOP_PREVIEW, reminder.id)
+                builder.addAction(0, "Stop preview", stop)
+                // Swiping a preview away stops it too, like the real heads-up adhan.
+                builder.setDeleteIntent(stop)
+            }
             reminder.isWakeUp -> {
                 builder.setOngoing(true)
                 builder.addAction(0, "Snooze ${reminder.snoozeMinutes} min", action(context, AlarmActionReceiver.ACTION_SNOOZE, reminder.id))
