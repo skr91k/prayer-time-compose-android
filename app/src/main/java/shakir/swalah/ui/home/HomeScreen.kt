@@ -60,6 +60,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -289,6 +291,21 @@ private fun Countdown(state: HomeUiState, landscape: Boolean) {
     }
 }
 
+/**
+ * For black-on-white bitmaps (the Qibla dial): dark pixels become white, light pixels transparent,
+ * so it matches the white vector icons whether or not its white background is opaque.
+ */
+private val DarkToWhite = ColorFilter.colorMatrix(
+    ColorMatrix(
+        floatArrayOf(
+            0f, 0f, 0f, 0f, 255f,
+            0f, 0f, 0f, 0f, 255f,
+            0f, 0f, 0f, 0f, 255f,
+            -0.299f, -0.587f, -0.114f, 1f, 0f,
+        )
+    )
+)
+
 private class FabAction(val label: String, val icon: Painter, val tint: Boolean = true, val onClick: () -> Unit)
 
 /** Expandable FAB menu with a dimmed overlay, like the old speed-dial. */
@@ -327,7 +344,7 @@ private fun SpeedDial(open: Boolean, onToggle: (Boolean) -> Unit, actions: List<
                                 contentColor = Color.White,
                             ) {
                                 if (action.tint) Icon(action.icon, action.label, modifier = Modifier.size(22.dp))
-                                else Image(action.icon, action.label, modifier = Modifier.size(26.dp))
+                                else Image(action.icon, action.label, modifier = Modifier.size(26.dp), colorFilter = DarkToWhite)
                             }
                         }
                     }
