@@ -30,6 +30,8 @@ data class AppSettings(
     val iqama: List<IqamaRule> = DEFAULT_IQAMA,
     /** Hijri date correction in days for the local moon sighting, see [shakir.swalah.prayer.Hijri.offsetDays]. */
     val hijriOffset: Int = 0,
+    /** Pages between Home and More in the bottom bar, as [shakir.swalah.ui.nav.NavDest] names. */
+    val bottomBar: List<String> = DEFAULT_BOTTOM_BAR,
 ) {
     fun iqamaFor(prayer: Prayer): IqamaRule? =
         Prayer.WITH_IQAMA.indexOf(prayer).takeIf { it >= 0 }?.let { iqama.getOrNull(it) }
@@ -46,6 +48,7 @@ data class AppSettings(
         put("thirdOfNight", thirdOfNight.name)
         put("iqamaCountdown", iqamaCountdown)
         put("hijriOffset", hijriOffset)
+        put("bottomBar", JSONArray(bottomBar))
         put("iqama", JSONArray().apply {
             iqama.forEach { r ->
                 put(JSONObject().put("after", r.afterAdhan).put("minutes", r.minutes).put("fixed", r.fixedMinuteOfDay))
@@ -54,6 +57,7 @@ data class AppSettings(
     }
 
     companion object {
+        val DEFAULT_BOTTOM_BAR = listOf("REMINDERS", "COUNTER")
         val DEFAULT_IQAMA = listOf(
             IqamaRule(minutes = 20), IqamaRule(minutes = 20), IqamaRule(minutes = 20),
             IqamaRule(minutes = 5), IqamaRule(minutes = 20),
@@ -72,6 +76,7 @@ data class AppSettings(
                 thirdOfNight = runCatching { ThirdOfNight.valueOf(o.optString("thirdOfNight")) }.getOrDefault(ThirdOfNight.ISHA_BASED),
                 iqamaCountdown = o.optBoolean("iqamaCountdown", true),
                 hijriOffset = o.optInt("hijriOffset"),
+                bottomBar = o.optJSONArray("bottomBar")?.let { a -> List(a.length()) { a.optString(it) } } ?: DEFAULT_BOTTOM_BAR,
                 iqama = List(Prayer.WITH_IQAMA.size) { i ->
                     iq?.optJSONObject(i)?.let {
                         IqamaRule(it.optBoolean("after", true), it.optInt("minutes", 20), it.optInt("fixed", -1))

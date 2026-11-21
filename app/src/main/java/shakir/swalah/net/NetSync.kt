@@ -21,9 +21,14 @@ object NetSync {
     private const val PREFS = "net_sync"
     private const val KEY_AUDIO_SYNCED = "audio_synced_at"
     private const val KEY_LOGGED = "logged_at"
+    private const val KEY_REPORTED = "alarm_reported_at"
     private const val KEY_INSTALL_ID = "install_id"
-    private const val AUDIO_EVERY_MS = 12 * 60 * 60_000L
+    private const val KEY_LATEST_VERSION = "latest_version"
+    private const val KEY_SKIPPED_VERSION = "skipped_version"
+    private const val AUDIO_EVERY_MS = 24 * 60 * 60_000L
     private const val LOG_EVERY_MS = 24 * 60 * 60_000L
+    /** An extra missed-alarm report goes at most this often (the daily log carries the rest). */
+    private const val REPORT_EVERY_MS = 24 * 60 * 60_000L
     /** Logs go a few seconds after the app opens, once re-arming has found any missed alarms. */
     private const val LOG_DELAY_MS = 5_000L
     /** Most alarm entries per request; the rest go next time. */
@@ -42,6 +47,10 @@ object NetSync {
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version
 
+    /** A newer app version to offer (set on the server's log page), or null. */
+    private val _update = MutableStateFlow<String?>(null)
+    val update: StateFlow<String?> = _update
+
     private fun prefs(context: Context) =
         context.createDeviceProtectedStorageContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -53,8 +62,8 @@ object NetSync {
         downloadDir(context).listFiles { f -> f.isFile && !f.name.endsWith(".part") }?.sortedBy { it.name }.orEmpty()
 
     /**
-     * On app open: audio at most every 12 h. After [LOG_DELAY_MS]: the daily log (at most daily,
-     * carrying every alarm entry not sent yet), or else an "alarm_report" if any alarm was missed.
+     * On app open: audio at most every 24 h. After [LOG_DELAY_MS]: the daily log (at most daily,
+     * carrying every alarm entry not sent yet), or else an "alarm_report" (at most daily) if any alarm was missed.
      * [force] re-checks audio now.
      */
     fun onAppOpen(context: Context, force: Boolean = false) {
@@ -67,13 +76,60 @@ object NetSync {
         main.postDelayed(delayedLogs, LOG_DELAY_MS)
     }
 
+    /**
+     * Update check: only when the app is started from its launcher icon (see MainActivity), so
+     * "Later" really means later. Shows the last known version first (works offline), then the server's.
+     */
+    fun checkUpdate(context: Context) {
+        val app = context.applicationContext
+        executor.execute {
+            publishUpdate(app)
+            PrayerApi.latestVersion()?.let {
+                prefs(app).edit().putString(KEY_LATEST_VERSION, it).apply()
+                publishUpdate(app)
+            }
+        }
+    }
+
+    /** "Don't show again": hides [version]; a later version is offered again. */
+    fun skipUpdate(context: Context, version: String) {
+        prefs(context).edit().putString(KEY_SKIPPED_VERSION, version).apply()
+        _update.value = null
+    }
+
+    /** "Later": hidden until the app is opened again. */
+    fun laterUpdate() {
+        _update.value = null
+    }
+
+    private fun publishUpdate(context: Context) {
+        val p = prefs(context)
+        val latest = p.getString(KEY_LATEST_VERSION, "").orEmpty()
+        val current = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+        val skipped = p.getString(KEY_SKIPPED_VERSION, "").orEmpty()
+        _update.value = latest.takeIf { isNewer(it, current) && isNewer(it, skipped) }
+    }
+
+    /** "4.0.10" > "4.0.9"; anything is newer than "". */
+    internal fun isNewer(a: String, b: String): Boolean {
+        val x = a.split(".").map { it.toIntOrNull() ?: return false }
+        if (b.isBlank()) return a.isNotBlank()
+        val y = b.split(".").map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(x.size, y.size)) {
+            val d = x.getOrElse(i) { 0 } - y.getOrElse(i) { 0 }
+            if (d != 0) return d > 0
+        }
+        return false
+    }
+
     private fun sendLogs(context: Context) {
         val p = prefs(context)
         val now = System.currentTimeMillis()
         val alarms = AlarmHistory.pending(context).take(MAX_ALARMS_PER_LOG)
         val event = when {
             now - p.getLong(KEY_LOGGED, 0) > LOG_EVERY_MS -> "daily"
-            alarms.any { it.optString("status") == AlarmHistory.MISSED } -> "alarm_report"
+            alarms.any { it.optString("status") == AlarmHistory.MISSED } &&
+                now - p.getLong(KEY_REPORTED, 0) > REPORT_EVERY_MS -> "alarm_report"
             else -> return
         }
         val sent = sendLog(context, event) {
@@ -85,6 +141,7 @@ object NetSync {
         if (!sent) return
         AlarmHistory.markSent(context, alarms)
         if (event == "daily") p.edit().putLong(KEY_LOGGED, now).apply()
+        else p.edit().putLong(KEY_REPORTED, now).apply()
     }
 
     /** Downloads only files that are missing or whose size differs from the server's. */

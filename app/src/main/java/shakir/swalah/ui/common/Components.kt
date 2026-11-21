@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
@@ -105,6 +106,9 @@ fun SettingItem(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
+    /** Instead of [icon]: any painter, drawn as is when [tintPainter] is false (e.g. the Qibla image). */
+    painter: Painter? = null,
+    tintPainter: Boolean = true,
     trailing: @Composable (() -> Unit)? = null,
 ) {
     val alpha = if (enabled) 1f else 0.4f
@@ -117,6 +121,10 @@ fun SettingItem(
     ) {
         if (icon != null) {
             Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
+            Spacer(Modifier.width(16.dp))
+        } else if (painter != null) {
+            if (tintPainter) Icon(painter, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha), modifier = Modifier.size(24.dp))
+            else androidx.compose.foundation.Image(painter, null, modifier = Modifier.size(24.dp))
             Spacer(Modifier.width(16.dp))
         }
         Column(Modifier.weight(1f)) {

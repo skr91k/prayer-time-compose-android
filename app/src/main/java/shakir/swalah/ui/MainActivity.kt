@@ -9,6 +9,26 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import shakir.swalah.ui.nav.NavDest
+import shakir.swalah.ui.nav.BottomBarScreen
+import shakir.swalah.data.AppSettings
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
+import androidx.compose.runtime.getValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -45,6 +65,7 @@ object Routes {
     const val MONTH = "month"
     const val QIBLA = "qibla"
     const val HIJRI = "hijri"
+    const val BOTTOM_BAR = "bottom_bar"
     /** Reminders with a new one-day reminder open, e.g. "reminders_new/2026-12-01". */
     const val REMINDER_ON_DATE = "reminders_new/{date}"
     fun reminderOnDate(date: java.time.LocalDate) = "reminders_new/$date"
@@ -63,6 +84,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val start = if (SettingsStore.get(this).location == null) Routes.LOCATION_FIRST else Routes.HOME
         if (savedInstanceState == null) shortcutRoute.value = intent.shortcutRoute()
+        if (savedInstanceState == null && intent.fromLauncherIcon()) NetSync.checkUpdate(this)
         setContent {
             AdhanTheme {
                 AppNavigation(start, resumeTick.intValue, shortcutRoute.value) { shortcutRoute.value = null }
@@ -74,6 +96,11 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         intent.shortcutRoute()?.let { shortcutRoute.value = it }
     }
+
+    /** Started by tapping the app icon (not a shortcut, notification, or recents). */
+    private fun Intent.fromLauncherIcon(): Boolean =
+        action == Intent.ACTION_MAIN && hasCategory(Intent.CATEGORY_LAUNCHER) &&
+            flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0
 
     private fun Intent.shortcutRoute(): String? =
         getStringExtra(EXTRA_ROUTE)?.takeIf { it == Routes.QIBLA || it == Routes.REMINDERS }
@@ -119,7 +146,42 @@ private fun AppNavigation(start: String, resumeTick: Int, shortcutRoute: String?
             launchSingleTop = true
         }
     }
-    NavHost(navController = nav, startDestination = start) {
+    val settings by SettingsStore.flow(context).collectAsStateWithLifecycle()
+    val bar = NavDest.bar((settings ?: AppSettings()).bottomBar)
+    val current = nav.currentBackStackEntryAsState().value?.destination?.route
+    // The bar shows on Home and on the pages it holds, not on deeper pages (editors, location...).
+    val selected = bar.firstOrNull { it.route != null && it.route == current }
+    Scaffold(
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0),
+        bottomBar = {
+            if (selected != null) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                    bar.forEach { d ->
+                        NavigationBarItem(
+                            selected = d == selected,
+                            onClick = {
+                                when {
+                                    d.url != null -> openInBrowser(context, d.url)
+                                    d == NavDest.HOME -> nav.popBackStack(Routes.HOME, inclusive = false)
+                                    d != selected -> nav.navigate(d.route!!) {
+                                        popUpTo(Routes.HOME)
+                                        launchSingleTop = true
+                                    }
+                                }
+                            },
+                            icon = {
+                                if (d.tint) Icon(d.icon(), d.title, modifier = Modifier.size(24.dp))
+                                else Image(d.icon(), d.title, modifier = Modifier.size(24.dp))
+                            },
+                            label = { Text(d.title, maxLines = 1) },
+                        )
+                    }
+                }
+            }
+        },
+    ) { padding ->
+    NavHost(navController = nav, startDestination = start, modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
         composable(Routes.HOME) {
             HomeScreen(
                 resumeTick = resumeTick,
@@ -128,7 +190,8 @@ private fun AppNavigation(start: String, resumeTick: Int, shortcutRoute: String?
             )
         }
         composable(Routes.REMINDERS) { RemindersScreen(resumeTick, onBack = { nav.close(Routes.REMINDERS) }, onSetLocation = { nav.navigate(Routes.LOCATION) }) }
-        composable(Routes.SETTINGS) { SettingsScreen(resumeTick, onBack = { nav.close(Routes.SETTINGS) }, onOpen = { nav.navigate(it) }) }
+        composable(Routes.SETTINGS) { SettingsScreen(resumeTick, onBack = null, onOpen = { nav.navigate(it) }) }
+        composable(Routes.BOTTOM_BAR) { BottomBarScreen(onBack = { nav.close(Routes.BOTTOM_BAR) }) }
         composable(Routes.ADHAN_TIME) { AdhanTimeScreen(onBack = { nav.close(Routes.ADHAN_TIME) }) }
         composable(Routes.IQAMA) { IqamaScreen(onBack = { nav.close(Routes.IQAMA) }) }
         composable(Routes.MONTH) { MonthScreen(onBack = { nav.close(Routes.MONTH) }) }
@@ -147,6 +210,7 @@ private fun AppNavigation(start: String, resumeTick: Int, shortcutRoute: String?
         composable(Routes.LOCATION_FIRST) {
             LocationScreen(firstRun = true, onDone = { nav.goHomeFromFirstRun() })
         }
+    }
     }
 }
 

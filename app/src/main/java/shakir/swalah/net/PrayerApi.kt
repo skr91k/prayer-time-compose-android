@@ -86,6 +86,17 @@ object PrayerApi {
         }.getOrDefault(false).also { if (!it) tmp.delete() }
     }
 
+    /** Newest app version set on the server ("4.0.5"); "" when none is set, null when unreachable. */
+    fun latestVersion(): String? {
+        val base = availableServer() ?: return null
+        return runCatching {
+            open(base, "/prayer/version").use { c ->
+                if (c.responseCode != 200) return null
+                JSONObject(c.connection.inputStream.bufferedReader().readText()).optString("latestVersion")
+            }
+        }.getOrNull()
+    }
+
     fun postLog(body: JSONObject): Boolean {
         val base = availableServer() ?: return false
         return runCatching {

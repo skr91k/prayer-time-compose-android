@@ -8,6 +8,9 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
+import shakir.swalah.ui.openInBrowser
+import shakir.swalah.net.NetSync
+import android.provider.Settings
 import androidx.compose.runtime.mutableIntStateOf
 import shakir.swalah.alarm.AlarmHistory
 import kotlinx.coroutines.delay
@@ -141,6 +144,19 @@ fun HomeScreen(
         )
     }
 
+    // A newer version set on the server (see NetSync): offered when no missed-alarm dialog is up.
+    val update by NetSync.update.collectAsStateWithLifecycle()
+    if (missed == 0) update?.let { version ->
+        UpdateDialog(
+            version = version,
+            onLater = { never -> if (never) NetSync.skipUpdate(context, version) else NetSync.laterUpdate() },
+            onUpdate = {
+                NetSync.laterUpdate()
+                openPlayStore(context)
+            },
+        )
+    }
+
     // Like the old app: keep the screen on while an iqama countdown is running (e.g. a mosque display).
     val view = LocalView.current
     val keepOn = state.phase != CountdownPhase.NEXT_ADHAN
@@ -210,6 +226,8 @@ fun HomeScreen(
             if (landscape) LandscapeTimes(state) else PortraitTimes(state)
         }
 
+        // Replaced by the bottom bar (see MainActivity); kept for now.
+        /*
         SpeedDial(
             open = fabOpen,
             onToggle = { fabOpen = it },
@@ -222,6 +240,7 @@ fun HomeScreen(
                 FabAction("Counter | عداد", rememberVectorPainter(AppIcons.MoreHoriz)) { onOpenUrl(COUNTER_URL) },
             ),
         )
+        */
     }
 }
 
@@ -393,6 +412,12 @@ private fun SpeedDial(open: Boolean, onToggle: (Boolean) -> Unit, actions: List<
 @Composable
 private fun MissedAlarmsDialog(missed: Int, onClose: (never: Boolean) -> Unit, onOpenReminders: (never: Boolean) -> Unit) {
     var never by remember { mutableStateOf(false) }
+    LaunchedEffect(never) {
+        if (never) {
+            delay(1_000)
+            onClose(true)
+        }
+    }
     val what = "$missed alarm" + (if (missed > 1) "s" else "") + " didn't ring"
     AlertDialog(
         onDismissRequest = { onClose(never) },
@@ -415,4 +440,47 @@ private fun MissedAlarmsDialog(missed: Int, onClose: (never: Boolean) -> Unit, o
         confirmButton = { Button(onClick = { onOpenReminders(never) }) { Text("Check reminders") } },
         dismissButton = { TextButton(onClick = { onClose(never) }) { Text("Close") } },
     )
+}
+
+@Composable
+private fun UpdateDialog(version: String, onLater: (never: Boolean) -> Unit, onUpdate: () -> Unit) {
+    var never by remember { mutableStateOf(false) }
+    // Ticking "Don't show again" is the answer: close a second later (untick in time to keep it).
+    LaunchedEffect(never) {
+        if (never) {
+            delay(1_000)
+            onLater(true)
+        }
+    }
+    AlertDialog(
+        onDismissRequest = { onLater(never) },
+        title = { Text("Update available") },
+        text = {
+            Column {
+                Text("Version $version of the app is available on the Play Store.")
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth().clickable { never = !never },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = never, onCheckedChange = null)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Don't show again for this version")
+                }
+            }
+        },
+        confirmButton = { Button(onClick = onUpdate) { Text("Update") } },
+        dismissButton = { TextButton(onClick = { onLater(never) }) { Text("Later") } },
+    )
+}
+
+/** The Play Store page of the release app (the debug build has its own id, so it's stripped). */
+private fun openPlayStore(context: android.content.Context) {
+    val id = context.packageName.removeSuffix(".debug")
+    val market = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$id"))
+    try {
+        context.startActivity(market)
+    } catch (_: Exception) {
+        openInBrowser(context, "https://play.google.com/store/apps/details?id=$id")
+    }
 }

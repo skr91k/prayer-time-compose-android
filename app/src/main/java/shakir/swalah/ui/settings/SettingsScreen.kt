@@ -35,13 +35,14 @@ import shakir.swalah.ui.common.AppIcons
 import shakir.swalah.ui.common.AppScaffold
 import shakir.swalah.ui.common.ChoiceDialog
 import shakir.swalah.ui.common.ReliabilityCard
+import shakir.swalah.ui.nav.NavDest
 import shakir.swalah.ui.common.SectionTitle
 import shakir.swalah.ui.common.SettingItem
 
 private const val CONTACT_URL = "https://utilitykit.web.app/contactus?id=adhan4"
 
 @Composable
-fun SettingsScreen(resumeTick: Int, onBack: () -> Unit, onOpen: (String) -> Unit) {
+fun SettingsScreen(resumeTick: Int, onBack: (() -> Unit)?, onOpen: (String) -> Unit) {
     val context = LocalContext.current
     val settings by SettingsStore.flow(context).collectAsStateWithLifecycle()
     val s = settings ?: AppSettings()
@@ -51,8 +52,27 @@ fun SettingsScreen(resumeTick: Int, onBack: () -> Unit, onOpen: (String) -> Unit
     val checks = remember(resumeTick, localTick) { Reliability.checks(context) }
     var dialog by remember { mutableStateOf<String?>(null) }
 
-    AppScaffold(title = "Settings | الإعدادات", onBack = onBack) { padding ->
+    AppScaffold(title = "More", onBack = onBack) { padding ->
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            // Pages already in the bottom bar aren't repeated here.
+            val bar = NavDest.bar(s.bottomBar)
+            val pages = NavDest.PICKABLE - bar.toSet()
+            if (pages.isNotEmpty()) {
+                SectionTitle("More pages")
+                pages.forEach { d ->
+                    SettingItem(d.longTitle, painter = d.icon(), tintPainter = d.tint, onClick = {
+                        if (d.url != null) openInBrowser(context, d.url) else d.route?.let(onOpen)
+                    })
+                }
+            }
+
+            SectionTitle("Settings | الإعدادات")
+            SettingItem(
+                "Bottom bar",
+                bar.joinToString(" · ") { it.title },
+                icon = AppIcons.Tune,
+                onClick = { onOpen(Routes.BOTTOM_BAR) },
+            )
             SectionTitle("Prayer")
             SettingItem(
                 "Reminders & alarms",
