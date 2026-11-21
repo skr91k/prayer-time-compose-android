@@ -68,7 +68,7 @@ class AlarmService : Service() {
         // A second reminder while a wake-up alarm is ringing: snooze the old one so it isn't lost.
         val previous = _ringing.value
         val previousReminder = current
-        if (previous != null && previous.id != reminder.id && !previous.preview && previousReminder?.isWakeUp == true) {
+        if (previous != null && previous.id != reminder.id && !previous.preview && previousReminder?.snoozable == true) {
             ReminderStore.update(this, previous.id) {
                 it.copy(enabled = true, snoozedUntil = System.currentTimeMillis() + it.snoozeMinutes * 60_000L)
             }?.let { ReminderScheduler.schedule(this, it) }
@@ -106,7 +106,7 @@ class AlarmService : Service() {
     private fun ring(reminder: Reminder, preview: Boolean = false) {
         current = reminder
         startedAt = System.currentTimeMillis()
-        val playOnce = reminder.autoStopSeconds == Reminder.PLAY_ONCE
+        val playOnce = reminder.playsOnce
         WakeLocks.acquire(this, if (playOnce) MAX_PLAY_ONCE_MS + 60_000 else reminder.autoSnoozeSeconds * 1_000L + 60_000)
         sound?.stop()
         sound = AlarmSound(this).also {
@@ -138,14 +138,19 @@ class AlarmService : Service() {
 
     /** The sound finished (play once) or its auto-stop time is up. */
     private fun finishRing() {
-        val id = current?.id ?: return stopSelf()
-        EventLog.log(this, "finished reminder $id")
-        if (_ringing.value?.preview == true) stopSelf() else ReminderController.dismissFully(this, id)
+        val reminder = current ?: return stopSelf()
+        EventLog.log(this, "finished reminder ${reminder.id}")
+        when {
+            _ringing.value?.preview == true -> stopSelf()
+            // Played once and nobody reacted: snooze, like an untouched wake-up alarm.
+            reminder.autoStopSeconds == Reminder.PLAY_ONCE_THEN_SNOOZE -> ReminderController.onRingTimeout(this, reminder.id)
+            else -> ReminderController.dismissFully(this, reminder.id)
+        }
     }
 
     override fun onDestroy() {
         EventLog.log(this, "service stopped (reminder ${current?.id})")
-        val ended = current?.takeIf { _ringing.value?.preview == false && !it.isWakeUp }
+        val ended = current?.takeIf { _ringing.value?.preview == false && !it.snoozable }
         handler.removeCallbacks(timeout)
         handler.removeCallbacks(autoStop)
         sound?.stop()
@@ -166,7 +171,8 @@ class AlarmService : Service() {
         /** Started from the list's "Preview": every button only ends the preview. */
         val preview: Boolean = false,
     ) {
-        val isWakeUp: Boolean get() = autoStopSeconds == 0
+        /** Has Snooze / Dismiss (wake-up alarm, or play once then snooze) rather than a single Stop. */
+        val snoozable: Boolean get() = autoStopSeconds == 0 || autoStopSeconds == Reminder.PLAY_ONCE_THEN_SNOOZE
     }
 
     companion object {
@@ -207,7 +213,7 @@ class AlarmService : Service() {
         /** Volume key / Stop: ends whatever is playing unless it's a wake-up alarm that needs dismissing. */
         fun stopIfNotWakeUp(context: Context): Boolean {
             val r = _ringing.value ?: return false
-            if (r.isWakeUp && !r.preview) return false
+            if (r.snoozable && !r.preview) return false
             if (r.preview) stop(context) else ReminderController.dismissFully(context, r.id)
             return true
         }

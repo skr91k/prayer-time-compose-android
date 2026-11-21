@@ -268,7 +268,7 @@ private fun RingingScreen(dismissId: Int?, onFinished: () -> Unit) {
             Spacer(Modifier.height(40.dp))
             when {
                 // Reminder-style alarm: stops by itself, so one tap is enough.
-                !r.isWakeUp -> {
+                !r.snoozable -> {
                     if (!silent && r.autoStopSeconds > 0) {
                         Text("Stops by itself after ${r.autoStopSeconds} s", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

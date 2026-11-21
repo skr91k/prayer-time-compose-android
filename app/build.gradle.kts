@@ -21,6 +21,7 @@ val apiProps = Properties().apply {
 }
 val apiServers: List<String> = apiProps.getProperty("api.servers", "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
 val apiSecret: String = apiProps.getProperty("api.secret", "")
+val ipApiKey: String = apiProps.getProperty("ipapi.key", "")
 
 /** Writes res/xml/network_security_config.xml allowing plain HTTP to the API hosts only. */
 abstract class GenerateNetworkConfig : DefaultTask() {
@@ -49,11 +50,12 @@ android {
         applicationId = "shakir.swalah"
         minSdk = 26
         targetSdk = 36
-        // Legacy app ended at 159 / 2.8.7; versionCode follows the version (4.0.3 -> 403).
-        versionCode = 403
-        versionName = "4.0.3"
+        // Legacy app ended at 159 / 2.8.7; versionCode follows the version (4.0.4 -> 404).
+        versionCode = 404
+        versionName = "4.0.4"
         buildConfigField("String", "API_SERVERS", "\"${apiServers.joinToString(",")}\"")
         buildConfigField("String", "API_SECRET", "\"$apiSecret\"")
+        buildConfigField("String", "IPAPI_KEY", "\"$ipApiKey\"")
     }
 
     signingConfigs {
@@ -71,7 +73,7 @@ android {
         debug {
             // Installs next to the Play Store app (which Play re-signs with its own key).
             applicationIdSuffix = ".debug"
-            resValue("string", "app_name", "Adhan أذان")
+            resValue("string", "app_name", "Adhan أذان Debug")
         }
         release {
             isMinifyEnabled = true

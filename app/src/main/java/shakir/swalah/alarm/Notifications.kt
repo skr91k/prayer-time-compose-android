@@ -82,7 +82,7 @@ object Notifications {
             .setSmallIcon(R.drawable.ic_stat_notifications)
             .setColor(ACCENT)
             .setContentTitle((if (preview) "Preview: " else "") + title(context, reminder))
-            .setContentText(if (reminder.isWakeUp) "Tap to open" else "Tap or swipe to stop")
+            .setContentText(if (reminder.snoozable) "Tap to open" else "Tap or swipe to stop")
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -97,7 +97,7 @@ object Notifications {
                 // Swiping a preview away stops it too, like the real heads-up adhan.
                 builder.setDeleteIntent(stop)
             }
-            reminder.isWakeUp -> {
+            reminder.snoozable -> {
                 builder.setOngoing(true)
                 builder.addAction(0, "Snooze ${reminder.snoozeMinutes} min", action(context, AlarmActionReceiver.ACTION_SNOOZE, reminder.id))
             }

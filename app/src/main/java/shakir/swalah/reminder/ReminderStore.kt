@@ -18,6 +18,7 @@ object ReminderStore {
     private const val KEY_SEEDED = "seeded_v1"
     private const val KEY_PRESETS_SEEN = "presets_seen"
     private const val KEY_RESET = "reset_v3"
+    private const val KEY_PAUSED = "all_paused"
 
     private val _version = MutableStateFlow(0)
     /** Bumped on every write so the UI can refresh. */
@@ -73,6 +74,18 @@ object ReminderStore {
     fun missingPresets(context: Context): List<Reminder> {
         val existing = all(context).mapNotNull { it.preset }.toSet()
         return Presets.all(context).filter { it.preset !in existing }
+    }
+
+    /**
+     * Master switch: while paused nothing rings or is armed, and the reminders list is read-only.
+     * Each reminder keeps its own on/off, so turning back on restores exactly what was active.
+     */
+    fun isPaused(context: Context): Boolean = prefs(context).getBoolean(KEY_PAUSED, false)
+
+    @Synchronized
+    fun setPaused(context: Context, paused: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PAUSED, paused).commit()
+        _version.value++
     }
 
     /** Inserts or replaces. A reminder with id 0 gets a fresh id. */

@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,11 +78,18 @@ import shakir.swalah.ui.common.daysLabel
 import shakir.swalah.ui.common.formatDayTime
 import shakir.swalah.ui.common.offsetLabel
 import shakir.swalah.ui.common.ringsIn
+import shakir.swalah.prayer.HijriDate
 import java.time.LocalDate
 
 /** All adhan, iqama and custom reminders, in the list style of the alarm app. */
 @Composable
-fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Unit) {
+fun RemindersScreen(
+    resumeTick: Int,
+    onBack: () -> Unit,
+    onSetLocation: () -> Unit,
+    /** Opened from the Hijri calendar: start with a new reminder on this day, go back when done. */
+    newOnDate: LocalDate? = null,
+) {
     val context = LocalContext.current
     val settings by SettingsStore.flow(context).collectAsStateWithLifecycle()
     val s = settings ?: AppSettings()
@@ -108,8 +116,23 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
     val checks = remember(version, resumeTick, localTick) { Reliability.checks(context) }
     val ringingState by AlarmService.ringing.collectAsStateWithLifecycle()
     val ringing = ringingState?.takeIf { !it.preview }
-    var editing by remember { mutableStateOf<Reminder?>(null) }
+    var editing by remember {
+        mutableStateOf(
+            newOnDate?.let { d ->
+                // From the Hijri calendar: a fixed-time reminder on that Hijri day.
+                val hijriDay = HijriDate.from(d)
+                Reminder(
+                    label = "", fullScreen = true, base = TimeBase.FIXED,
+                    autoStopSeconds = Reminder.PLAY_ONCE_THEN_SNOOZE,
+                    hijri = hijriDay != null, date = hijriDay?.toString() ?: d.toString(),
+                )
+            },
+        )
+    }
     var menuOpen by remember { mutableStateOf(false) }
+    /** Master switch off: the list is read-only and nothing rings (see ReminderController.setAllPaused). */
+    val paused = remember(version, resumeTick) { ReminderStore.isPaused(context) }
+    var confirmPause by remember { mutableStateOf(false) }
     /** Non-null while the "Restore built-in reminders?" dialog is open: the ones it would add back. */
     var confirmRestore by remember { mutableStateOf<List<Reminder>?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -140,7 +163,7 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
         snackbar = snackbar,
         actions = {
             Box {
-                IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "More") }
+                IconButton(onClick = { menuOpen = true }, enabled = !paused) { Icon(Icons.Default.MoreVert, "More") }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(text = { Text("Restore built-in reminders") }, onClick = {
                         menuOpen = false
@@ -150,7 +173,9 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
             }
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { editing = Reminder(label = "", fullScreen = true) }) { Icon(Icons.Default.Add, "Add reminder") }
+            if (!paused) {
+                FloatingActionButton(onClick = { editing = Reminder(label = "", fullScreen = true) }) { Icon(Icons.Default.Add, "Add reminder") }
+            }
         },
     ) { padding ->
         LazyColumn(
@@ -158,6 +183,17 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
             contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item {
+                AllRemindersCard(
+                    paused = paused,
+                    onChange = { on ->
+                        if (on) {
+                            ReminderController.setAllPaused(context, false)
+                            Toast.makeText(context, "All reminders turned back on", Toast.LENGTH_SHORT).show()
+                        } else confirmPause = true
+                    },
+                )
+            }
             if (calc == null) item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -166,7 +202,7 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
                     }
                 }
             }
-            item { NextReminderCard(all, calc, format, now) }
+            item { NextReminderCard(if (paused) emptyList() else all, calc, format, now, paused) }
             item {
                 ReliabilityCard(
                     checks,
@@ -185,7 +221,7 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
                 val isRinging = ringing?.id == r.id
                 val locked = isRinging || (r.enabled && r.snoozedUntil > now)
                 ReminderRow(
-                    r, calc, format, now, locked, isRinging,
+                    r, calc, format, now, locked, isRinging, paused,
                     onToggle = { enabled -> toastScheduled(ReminderController.save(context, r.copy(enabled = enabled))) },
                     onAction = { action ->
                         when (action) {
@@ -231,6 +267,26 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
         }
     }
 
+    if (confirmPause) {
+        AlertDialog(
+            onDismissRequest = { confirmPause = false },
+            title = { Text("Turn off all reminders?") },
+            text = {
+                Text(
+                    "No adhan, iqama or other reminder will ring until you turn them back on. " +
+                        "Each reminder keeps its own setting, so turning back on restores the ones that are active now.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmPause = false
+                    ReminderController.setAllPaused(context, true)
+                }) { Text("Turn off all") }
+            },
+            dismissButton = { TextButton(onClick = { confirmPause = false }) { Text("Cancel") } },
+        )
+    }
+
     confirmRestore?.let { missing ->
         AlertDialog(
             onDismissRequest = { confirmRestore = null },
@@ -264,23 +320,50 @@ fun RemindersScreen(resumeTick: Int, onBack: () -> Unit, onSetLocation: () -> Un
             initial = r,
             calc = calc,
             format = format,
-            onDismiss = { editing = null },
+            onDismiss = {
+                editing = null
+                if (newOnDate != null) onBack()
+            },
             onSave = {
                 toastScheduled(ReminderController.save(context, it))
                 editing = null
+                if (newOnDate != null) onBack()
             },
         )
     }
 }
 
+/** Master on/off for every reminder. Off asks first; on is immediate. */
 @Composable
-private fun NextReminderCard(all: List<Reminder>, calc: PrayerCalculator?, format: TimeFormat, now: Long) {
+private fun AllRemindersCard(paused: Boolean, onChange: (Boolean) -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (paused) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainer,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("All reminders", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (paused) "Off - nothing will ring. Turn on to restore." else "On",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            AppSwitch(checked = !paused, onCheckedChange = onChange)
+        }
+    }
+}
+
+@Composable
+private fun NextReminderCard(all: List<Reminder>, calc: PrayerCalculator?, format: TimeFormat, now: Long, paused: Boolean = false) {
     val next = all.filter { it.enabled }.mapNotNull { r -> r.nextTrigger(calc, now)?.let { r to it } }.minByOrNull { it.second }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp)) {
             Text("Next reminder", color = MaterialTheme.colorScheme.onPrimaryContainer)
             if (next == null) {
-                Text("None set", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Text(if (paused) "All off" else "None set", fontSize = 28.sp, fontWeight = FontWeight.Bold)
             } else {
                 Text(formatDayTime(format, next.second), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Text("${next.first.label.ifBlank { "Reminder" }} · ${ringsIn(next.second, now)}", color = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -300,6 +383,8 @@ private fun ReminderRow(
     now: Long,
     locked: Boolean,
     isRinging: Boolean,
+    /** All reminders off: shown greyed, nothing reacts. */
+    paused: Boolean,
     onToggle: (Boolean) -> Unit,
     onAction: (RowAction) -> Unit,
     onClick: () -> Unit,
@@ -321,10 +406,11 @@ private fun ReminderRow(
         else -> AppColors.ReminderOther
     }
     Card(
-        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }),
-        colors = CardDefaults.cardColors(containerColor = background),
+        modifier = Modifier.fillMaxWidth()
+            .then(if (paused) Modifier.alpha(0.5f) else Modifier.combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })),
+        colors = CardDefaults.cardColors(containerColor = if (paused) MaterialTheme.colorScheme.surfaceContainer else background),
     ) {
-        val dim = if (r.enabled) 1f else 0.45f
+        val dim = if (r.enabled && !paused) 1f else 0.45f
         Column(Modifier.padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -335,7 +421,7 @@ private fun ReminderRow(
                     modifier = Modifier.weight(1f).padding(top = 8.dp),
                 )
                 Box {
-                    IconButton(onClick = { menuOpen = true }) {
+                    IconButton(onClick = { menuOpen = true }, enabled = !paused) {
                         Icon(Icons.Default.MoreVert, "More", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -396,7 +482,8 @@ private fun ReminderRow(
                     Icon(Icons.Default.Lock, contentDescription = "Locked until dismissed", tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
                 }
-                AppSwitch(checked = r.enabled, onCheckedChange = onToggle, enabled = !locked)
+                // Paused: the switch still shows the reminder's own on/off, but greyed and inert.
+                AppSwitch(checked = r.enabled, onCheckedChange = onToggle, enabled = !locked && !paused)
             }
         }
     }

@@ -104,9 +104,9 @@ fun HomeScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    // Only the problems that really stop an adhan; the rest is in the reminders page.
+    // Any unfixed phone setting (battery, autostart...) can keep the adhan from ringing.
     val critical = remember(resumeTick) {
-        Reliability.checks(context).any { !it.ok && (it.title.startsWith("Exact") || it.title.startsWith("Notifications")) }
+        !Reliability.isHomeWarningHidden(context) && Reliability.checks(context).any { !it.ok }
     }
     var fabOpen by rememberSaveable { mutableStateOf(false) }
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -151,18 +151,25 @@ fun HomeScreen(
                 .padding(top = if (landscape) 8.sdp else 30.sdp, bottom = 96.dp),
         ) {
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.sdp)
-                    .clickable { onOpen(Routes.LOCATION) }
-                    .padding(vertical = 5.sdp),
+                Modifier.fillMaxWidth().padding(horizontal = 20.sdp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Default.LocationOn, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(5.sdp))
-                Text(state.locationName, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1)
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .clickable { onOpen(Routes.LOCATION) }
+                        .padding(vertical = 5.sdp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.LocationOn, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(5.sdp))
+                    Text(state.locationName, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1)
+                }
                 Spacer(Modifier.width(16.dp))
-                Text(state.hijriDate, color = Color.White, fontSize = 16.dpText, textAlign = TextAlign.Center)
+                Text(
+                    state.hijriDate, color = Color.White, fontSize = 16.dpText, textAlign = TextAlign.Center,
+                    modifier = Modifier.clickable { onOpen(Routes.HIJRI) }.padding(vertical = 5.sdp),
+                )
             }
             if (critical) {
                 Surface(

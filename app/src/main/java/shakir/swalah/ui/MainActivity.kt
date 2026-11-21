@@ -23,6 +23,7 @@ import shakir.swalah.alarm.AlarmService
 import shakir.swalah.alarm.ReminderScheduler
 import shakir.swalah.net.NetSync
 import shakir.swalah.data.SettingsStore
+import shakir.swalah.ui.hijri.HijriCalendarScreen
 import shakir.swalah.ui.home.HomeScreen
 import shakir.swalah.ui.location.LocationScreen
 import shakir.swalah.ui.month.MonthScreen
@@ -43,6 +44,10 @@ object Routes {
     const val LOCATION_FIRST = "location_first"
     const val MONTH = "month"
     const val QIBLA = "qibla"
+    const val HIJRI = "hijri"
+    /** Reminders with a new one-day reminder open, e.g. "reminders_new/2026-12-01". */
+    const val REMINDER_ON_DATE = "reminders_new/{date}"
+    fun reminderOnDate(date: java.time.LocalDate) = "reminders_new/$date"
 }
 
 class MainActivity : ComponentActivity() {
@@ -127,6 +132,16 @@ private fun AppNavigation(start: String, resumeTick: Int, shortcutRoute: String?
         composable(Routes.ADHAN_TIME) { AdhanTimeScreen(onBack = { nav.close(Routes.ADHAN_TIME) }) }
         composable(Routes.IQAMA) { IqamaScreen(onBack = { nav.close(Routes.IQAMA) }) }
         composable(Routes.MONTH) { MonthScreen(onBack = { nav.close(Routes.MONTH) }) }
+        composable(Routes.HIJRI) {
+            HijriCalendarScreen(onBack = { nav.close(Routes.HIJRI) }, onAddReminder = { nav.navigate(Routes.reminderOnDate(it)) })
+        }
+        composable(Routes.REMINDER_ON_DATE) { entry ->
+            val date = entry.arguments?.getString("date")?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+            RemindersScreen(
+                resumeTick, onBack = { nav.close(Routes.REMINDER_ON_DATE) },
+                onSetLocation = { nav.navigate(Routes.LOCATION) }, newOnDate = date,
+            )
+        }
         composable(Routes.QIBLA) { QiblaScreen(onBack = { nav.close(Routes.QIBLA) }) }
         composable(Routes.LOCATION) { LocationScreen(firstRun = false, onDone = { nav.close(Routes.LOCATION) }) }
         composable(Routes.LOCATION_FIRST) {

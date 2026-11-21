@@ -49,6 +49,7 @@ object ReminderController {
      */
     fun onFire(context: Context, id: Int, trigger: Long, redelivered: Boolean): Reminder? {
         val reminder = ReminderStore.get(context, id) ?: return null
+        if (id != Reminder.TEST_ID && ReminderStore.isPaused(context)) return null
         if (!redelivered && (reminder.lastFiredAt == trigger || !reminder.enabled)) return null
         ReminderScheduler.cancelBackup(context, id)
         Notifications.cancelSnoozed(context, id)
@@ -60,9 +61,31 @@ object ReminderController {
                 enabled = it.isRepeating,
             )
         } ?: return null
+        AlarmHistory.recordFired(context, reminder, trigger, snooze = reminder.snoozedUntil == trigger)
         // Re-arm everything now, so tomorrow's reminders exist even if this process dies while ringing.
         ReminderScheduler.rescheduleAll(context, "reminder $id fired")
         return updated
+    }
+
+    /**
+     * Turns every reminder off at once (or back on), without touching each one's own switch.
+     * Pausing also stops a ringing reminder and drops snoozes; the armed slots are forgotten so
+     * that resuming doesn't report them as missed.
+     */
+    fun setAllPaused(context: Context, paused: Boolean) {
+        EventLog.log(context, if (paused) "ALL reminders turned off" else "ALL reminders turned back on")
+        ReminderStore.setPaused(context, paused)
+        if (paused) {
+            if (AlarmService.ringing.value?.preview != true) AlarmService.stop(context)
+            for (r in ReminderStore.all(context)) {
+                if (r.id == Reminder.TEST_ID) continue
+                ReminderScheduler.cancel(context, r.id)
+                Notifications.cancelSnoozed(context, r.id)
+                ReminderStore.update(context, r.id) { it.copy(snoozedUntil = 0, autoSnoozes = 0, scheduledAt = 0) }
+            }
+        } else {
+            ReminderScheduler.rescheduleAll(context, "all reminders turned back on")
+        }
     }
 
     fun snooze(context: Context, id: Int, auto: Boolean = false) {

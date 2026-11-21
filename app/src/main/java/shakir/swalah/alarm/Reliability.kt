@@ -21,9 +21,12 @@ object Reliability {
         val fixIntent: Intent? = null,
         /** Manual checks can't be detected; the user confirms them. */
         val manualKey: String? = null,
+        /** Nice to have: not counted as a problem, shown only in the expanded list. */
+        val optional: Boolean = false,
     )
 
     private const val KEY_OEM_DONE = "oem_autostart_done"
+    private const val KEY_HIDE_HOME_WARNING = "hide_home_warning"
 
     private val aggressiveOems = setOf(
         "xiaomi", "redmi", "poco", "huawei", "honor", "oppo", "realme", "oneplus",
@@ -74,6 +77,13 @@ object Reliability {
             )
         }
         list += Check(
+            "Ringing screen over other apps",
+            "Opens the ringing screen even while you use another app, instead of a notification.",
+            Settings.canDrawOverlays(context),
+            "Allow",
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkgUri),
+        )
+        list += Check(
             "Battery optimization off",
             "Stops Android from putting the app to sleep.",
             context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(pkg),
@@ -99,6 +109,13 @@ object Reliability {
             )
         }
         return list
+    }
+
+    /** The user chose not to see the "may not play on time" banner on the home screen. */
+    fun isHomeWarningHidden(context: Context): Boolean = prefs(context).getBoolean(KEY_HIDE_HOME_WARNING, false)
+
+    fun setHomeWarningHidden(context: Context, hidden: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HIDE_HOME_WARNING, hidden).apply()
     }
 
     fun markManualDone(context: Context, key: String) {

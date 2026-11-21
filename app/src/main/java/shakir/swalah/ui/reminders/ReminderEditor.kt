@@ -98,7 +98,7 @@ fun ReminderEditor(
     // Date / Monthly / Yearly can follow the Hijri calendar instead.
     var hijri by remember { mutableStateOf(initial.hijri) }
     val hijriToday = remember { HijriDate.from(LocalDate.now()) ?: HijriDate(1448, 1, 1) }
-    var hijriDate by remember { mutableStateOf(initial.hijriDate ?: HijriDate.from(LocalDate.now().plusDays(1)) ?: hijriToday) }
+    var hijriDate by remember { mutableStateOf(initial.hijriDate ?: HijriDate.from(initial.exactDate ?: LocalDate.now().plusDays(1)) ?: hijriToday) }
     var hijriMonthDay by remember { mutableIntStateOf(if (initial.hijri && initial.monthDay != 0) initial.monthDay else hijriToday.day) }
     var showHijriPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -259,13 +259,14 @@ fun ReminderEditor(
 
                 SectionLabel("Plays")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), modifier = Modifier.fillMaxWidth()) {
-                    listOf(Reminder.PLAY_ONCE, 5, 15, 30, 60, 0).forEach { s ->
+                    listOf(Reminder.PLAY_ONCE, Reminder.PLAY_ONCE_THEN_SNOOZE, 5, 15, 30, 60, 0).forEach { s ->
                         FilterChip(selected = autoStop == s, onClick = { autoStop = s }, label = { Text(playsLabel(s)) })
                     }
                 }
                 Text(
                     when {
                         autoStop == Reminder.PLAY_ONCE -> "Plays the sound once (a full adhan), then stops"
+                        autoStop == Reminder.PLAY_ONCE_THEN_SNOOZE -> "Plays the sound once with Snooze / Dismiss; snoozes by itself if you don't tap"
                         autoStop == 0 -> "Rings until you dismiss it (wake-up alarm)"
                         else -> "Rings $autoStop s, then stops by itself"
                     },
@@ -273,6 +274,12 @@ fun ReminderEditor(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 6.dp),
                 )
+                if (autoStop == Reminder.PLAY_ONCE_THEN_SNOOZE) {
+                    SectionLabel("Snooze length")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(3, 5, 10, 15).forEach { m -> FilterChip(selected = snooze == m, onClick = { snooze = m }, label = { Text("$m min") }) }
+                    }
+                }
                 if (autoStop == 0) {
                     SettingRow("Solve math to dismiss", "Keeps you from turning it off half asleep") { AppSwitch(math, { math = it }) }
                     SectionLabel("Snooze length")
@@ -303,7 +310,7 @@ fun ReminderEditor(
                                 label = if (initial.isCoreBuiltIn) initial.label else label.trim().ifEmpty { defaultLabel(base, prayer, offset) },
                                 vibrate = vibrate,
                                 fullScreen = fullScreen,
-                                mathChallenge = math,
+                                mathChallenge = math && autoStop == 0,
                                 snoozeMinutes = snooze,
                                 ringtoneUri = ringtone,
                                 autoStopSeconds = autoStop,
@@ -396,6 +403,7 @@ private fun defaultLabel(base: TimeBase, prayer: Prayer, offset: Int): String = 
 
 private fun playsLabel(s: Int): String = when (s) {
     Reminder.PLAY_ONCE -> "Once"
+    Reminder.PLAY_ONCE_THEN_SNOOZE -> "Once, then snooze"
     0 -> "Until dismissed"
     else -> "$s s"
 }

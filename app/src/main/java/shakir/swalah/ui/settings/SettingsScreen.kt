@@ -56,7 +56,8 @@ fun SettingsScreen(resumeTick: Int, onBack: () -> Unit, onOpen: (String) -> Unit
             SectionTitle("Prayer")
             SettingItem(
                 "Reminders & alarms",
-                "${reminders.count { it.enabled }} of ${reminders.size} on - adhan, iqama, Suhoor, Tahajjud, your own",
+                if (ReminderStore.isPaused(context)) "All reminders off - nothing will ring"
+                else "${reminders.count { it.enabled }} of ${reminders.size} on - adhan, iqama, Suhoor, Tahajjud, your own",
                 icon = AppIcons.Alarm,
                 onClick = { onOpen(Routes.REMINDERS) },
             )

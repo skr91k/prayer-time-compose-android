@@ -28,6 +28,8 @@ data class AppSettings(
     val iqamaCountdown: Boolean = true,
     /** One rule per [Prayer.WITH_IQAMA] entry. */
     val iqama: List<IqamaRule> = DEFAULT_IQAMA,
+    /** Hijri date correction in days for the local moon sighting, see [shakir.swalah.prayer.Hijri.offsetDays]. */
+    val hijriOffset: Int = 0,
 ) {
     fun iqamaFor(prayer: Prayer): IqamaRule? =
         Prayer.WITH_IQAMA.indexOf(prayer).takeIf { it >= 0 }?.let { iqama.getOrNull(it) }
@@ -43,6 +45,7 @@ data class AppSettings(
         put("showMidnight", showMidnight)
         put("thirdOfNight", thirdOfNight.name)
         put("iqamaCountdown", iqamaCountdown)
+        put("hijriOffset", hijriOffset)
         put("iqama", JSONArray().apply {
             iqama.forEach { r ->
                 put(JSONObject().put("after", r.afterAdhan).put("minutes", r.minutes).put("fixed", r.fixedMinuteOfDay))
@@ -68,6 +71,7 @@ data class AppSettings(
                 showMidnight = o.optBoolean("showMidnight"),
                 thirdOfNight = runCatching { ThirdOfNight.valueOf(o.optString("thirdOfNight")) }.getOrDefault(ThirdOfNight.ISHA_BASED),
                 iqamaCountdown = o.optBoolean("iqamaCountdown", true),
+                hijriOffset = o.optInt("hijriOffset"),
                 iqama = List(Prayer.WITH_IQAMA.size) { i ->
                     iq?.optJSONObject(i)?.let {
                         IqamaRule(it.optBoolean("after", true), it.optInt("minutes", 20), it.optInt("fixed", -1))

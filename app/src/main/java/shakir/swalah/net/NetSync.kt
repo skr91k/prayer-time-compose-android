@@ -2,9 +2,13 @@ package shakir.swalah.net
 
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.json.JSONArray
 import org.json.JSONObject
+import shakir.swalah.alarm.AlarmHistory
 import shakir.swalah.alarm.EventLog
 import java.io.File
 import java.util.Locale
@@ -12,7 +16,7 @@ import java.util.TimeZone
 import java.util.UUID
 import java.util.concurrent.Executors
 
-/** Background work against [PrayerApi]: adhan audio downloads and the daily device log. */
+/** Background work against [PrayerApi]: adhan audio downloads, the daily device log and the alarm report. */
 object NetSync {
     private const val PREFS = "net_sync"
     private const val KEY_AUDIO_SYNCED = "audio_synced_at"
@@ -20,8 +24,15 @@ object NetSync {
     private const val KEY_INSTALL_ID = "install_id"
     private const val AUDIO_EVERY_MS = 12 * 60 * 60_000L
     private const val LOG_EVERY_MS = 24 * 60 * 60_000L
+    /** Logs go a few seconds after the app opens, once re-arming has found any missed alarms. */
+    private const val LOG_DELAY_MS = 5_000L
+    /** Most alarm entries per request; the rest go next time. */
+    private const val MAX_ALARMS_PER_LOG = 200
 
     private val executor = Executors.newSingleThreadExecutor()
+    private val main = Handler(Looper.getMainLooper())
+    @Volatile private var appContext: Context? = null
+    private val delayedLogs = Runnable { appContext?.let { app -> executor.execute { sendLogs(app) } } }
 
     /** Null when idle, otherwise a short status for the sound picker ("Downloading Azan…"). */
     private val _status = MutableStateFlow<String?>(null)
@@ -41,15 +52,39 @@ object NetSync {
     fun downloadedSounds(context: Context): List<File> =
         downloadDir(context).listFiles { f -> f.isFile && !f.name.endsWith(".part") }?.sortedBy { it.name }.orEmpty()
 
-    /** On app open: audio at most every 12 h, log at most daily. [force] re-checks audio now. */
+    /**
+     * On app open: audio at most every 12 h. After [LOG_DELAY_MS]: the daily log (at most daily,
+     * carrying every alarm entry not sent yet), or else an "alarm_report" if any alarm was missed.
+     * [force] re-checks audio now.
+     */
     fun onAppOpen(context: Context, force: Boolean = false) {
         val app = context.applicationContext
         executor.execute {
-            val now = System.currentTimeMillis()
-            val p = prefs(app)
-            if (force || now - p.getLong(KEY_AUDIO_SYNCED, 0) > AUDIO_EVERY_MS) syncAudio(app)
-            if (now - p.getLong(KEY_LOGGED, 0) > LOG_EVERY_MS && sendLog(app, "daily")) p.edit().putLong(KEY_LOGGED, now).apply()
+            if (force || System.currentTimeMillis() - prefs(app).getLong(KEY_AUDIO_SYNCED, 0) > AUDIO_EVERY_MS) syncAudio(app)
         }
+        appContext = app
+        main.removeCallbacks(delayedLogs)
+        main.postDelayed(delayedLogs, LOG_DELAY_MS)
+    }
+
+    private fun sendLogs(context: Context) {
+        val p = prefs(context)
+        val now = System.currentTimeMillis()
+        val alarms = AlarmHistory.pending(context).take(MAX_ALARMS_PER_LOG)
+        val event = when {
+            now - p.getLong(KEY_LOGGED, 0) > LOG_EVERY_MS -> "daily"
+            alarms.any { it.optString("status") == AlarmHistory.MISSED } -> "alarm_report"
+            else -> return
+        }
+        val sent = sendLog(context, event) {
+            put("alarms", JSONArray(alarms.map { JSONObject(it.toString()).apply { remove("seq") } }))
+            put("alarmCount", alarms.size)
+            put("missedCount", alarms.count { it.optString("status") == AlarmHistory.MISSED })
+            put("lateCount", alarms.count { it.optString("status") == AlarmHistory.LATE })
+        }
+        if (!sent) return
+        AlarmHistory.markSent(context, alarms)
+        if (event == "daily") p.edit().putLong(KEY_LOGGED, now).apply()
     }
 
     /** Downloads only files that are missing or whose size differs from the server's. */
@@ -83,7 +118,8 @@ object NetSync {
 
     /**
      * Device info (as the old app logged, without its client-side IP lookup) plus an [event]:
-     * "daily" once a day, "audio_downloaded" after each downloaded adhan file.
+     * "daily" once a day, "alarm_report" when alarms were missed, "audio_downloaded" after each
+     * downloaded adhan file.
      */
     private fun sendLog(context: Context, event: String, extra: JSONObject.() -> Unit = {}): Boolean {
         val p = prefs(context)

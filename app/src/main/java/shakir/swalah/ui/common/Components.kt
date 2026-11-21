@@ -19,9 +19,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -46,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import shakir.swalah.alarm.Reliability
 import shakir.swalah.ui.theme.appBackground
@@ -177,7 +180,7 @@ fun ReliabilityCard(
     onManualDone: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val problems = checks.filter { !it.ok }
+    val problems = checks.filter { !it.ok && !it.optional }
     var expanded by remember { mutableStateOf(false) }
     Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.padding(16.dp)) {
@@ -209,10 +212,18 @@ fun ReliabilityCard(
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        if (check.ok) Icons.Default.CheckCircle else Icons.Default.Warning,
+                        when {
+                            check.ok -> Icons.Default.CheckCircle
+                            check.optional -> Icons.Default.Info
+                            else -> Icons.Default.Warning
+                        },
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
-                        tint = if (check.ok) Color(0xFF4CD964) else MaterialTheme.colorScheme.error,
+                        tint = when {
+                            check.ok -> Color(0xFF4CD964)
+                            check.optional -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.error
+                        },
                     )
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
@@ -229,6 +240,22 @@ fun ReliabilityCard(
                             TextButton(onClick = { onFix(check) }) { Text(check.fixLabel ?: "Fix") }
                         }
                     }
+                }
+            }
+            val context = LocalContext.current
+            var hideHome by remember { mutableStateOf(Reliability.isHomeWarningHidden(context)) }
+            if (problems.isNotEmpty() || hideHome) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        hideHome = !hideHome
+                        Reliability.setHomeWarningHidden(context, hideHome)
+                    },
+                ) {
+                    Checkbox(checked = hideHome, onCheckedChange = null)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Don't show warning on home screen", style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }

@@ -37,14 +37,19 @@ object ReminderScheduler {
     fun rescheduleAll(context: Context, reason: String) {
         val now = System.currentTimeMillis()
         val calc = calculator(context)
-        EventLog.log(context, "rescheduleAll ($reason), exact=${canScheduleExact(context)}, location=${calc != null}")
+        val paused = ReminderStore.isPaused(context)
+        EventLog.log(context, "rescheduleAll ($reason), exact=${canScheduleExact(context)}, location=${calc != null}, paused=$paused")
         for (reminder in ReminderStore.all(context)) {
-            if (!reminder.enabled) {
+            if (!reminder.enabled || (paused && reminder.id != Reminder.TEST_ID)) {
                 cancel(context, reminder.id)
                 continue
             }
             val window = if (reminder.isWakeUp) MISSED_WINDOW_WAKE_UP_MS else MISSED_WINDOW_SHORT_MS
             val missed = reminder.scheduledAt in (now - window) until now && reminder.lastFiredAt != reminder.scheduledAt
+            // Slot passed outside the catch-up window without ringing: it is lost, report it.
+            if (reminder.scheduledAt in 1 until (now - window) && reminder.lastFiredAt != reminder.scheduledAt) {
+                AlarmHistory.recordMissed(context, reminder, reminder.scheduledAt)
+            }
             if (missed) {
                 EventLog.log(context, "MISSED reminder ${reminder.id} slot ${EventLog.time(reminder.scheduledAt)} - ringing now")
                 arm(context, reminder.id, trigger = reminder.scheduledAt, fireAt = now + 3_000)
@@ -56,6 +61,10 @@ object ReminderScheduler {
 
     /** Arms the next occurrence of [reminder]; returns its trigger time (null = can't compute). */
     fun schedule(context: Context, reminder: Reminder, calc: PrayerCalculator? = calculator(context)): Long? {
+        if (reminder.id != Reminder.TEST_ID && ReminderStore.isPaused(context)) {
+            cancel(context, reminder.id)
+            return null
+        }
         val trigger = reminder.nextTrigger(calc)
         if (trigger == null) {
             EventLog.log(context, "reminder ${reminder.id} has no trigger (no location?) - not armed")

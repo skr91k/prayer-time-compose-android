@@ -19,8 +19,19 @@ object Hijri {
     /** Monday first, like java.time.DayOfWeek. */
     private val DAYS = listOf("الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد")
 
+    /**
+     * Days added to the Umm al-Qura date to match the local moon sighting (-2..+2), from the
+     * Hijri calendar screen. Kept here so every conversion (home date, Hijri reminders) follows it.
+     */
+    @Volatile
+    var offsetDays: Int = 0
+
+    const val MAX_OFFSET = 2
+
+    fun monthArabic(month: Int): String = MONTHS[month - 1]
+
     fun arabic(date: LocalDate = LocalDate.now()): String = runCatching {
-        val h = HijrahDate.from(date)
+        val h = HijrahDate.from(date.plusDays(offsetDays.toLong()))
         val day = h.get(ChronoField.DAY_OF_MONTH)
         val month = h.get(ChronoField.MONTH_OF_YEAR)
         val year = h.get(ChronoField.YEAR)
@@ -37,6 +48,7 @@ data class HijriDate(val year: Int, val month: Int, val day: Int) {
     fun toGregorian(): LocalDate? = runCatching {
         val first = HijrahDate.of(year, month, 1)
         LocalDate.from(first.plus((minOf(day, first.lengthOfMonth()) - 1).toLong(), ChronoUnit.DAYS))
+            .minusDays(Hijri.offsetDays.toLong())
     }.getOrNull()
 
     /** Same day number, [n] Hijri months later (or earlier). */
@@ -58,7 +70,7 @@ data class HijriDate(val year: Int, val month: Int, val day: Int) {
         }.getOrNull()
 
         fun from(date: LocalDate): HijriDate? = runCatching {
-            val h = HijrahDate.from(date)
+            val h = HijrahDate.from(date.plusDays(Hijri.offsetDays.toLong()))
             HijriDate(h.get(ChronoField.YEAR), h.get(ChronoField.MONTH_OF_YEAR), h.get(ChronoField.DAY_OF_MONTH))
         }.getOrNull()
     }

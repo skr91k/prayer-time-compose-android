@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -53,11 +54,15 @@ import kotlinx.coroutines.withContext
 import shakir.swalah.data.AppLocation
 import shakir.swalah.data.Cities
 import shakir.swalah.data.SettingsStore
+import shakir.swalah.net.IpLocation
 import shakir.swalah.ui.common.AppIcons
 import shakir.swalah.ui.common.AppScaffold
 import kotlin.math.cos
 
-/** Pick a city from the bundled list, or use the phone's current position. */
+/**
+ * Pick the phone's current (GPS) position, the approximate one from its IP address, or a city from
+ * the bundled list. The list is ordered by distance from GPS, else IP, else the saved location.
+ */
 @Composable
 fun LocationScreen(firstRun: Boolean, onDone: () -> Unit) {
     val context = LocalContext.current
@@ -67,9 +72,15 @@ fun LocationScreen(firstRun: Boolean, onDone: () -> Unit) {
     var current by remember { mutableStateOf<AppLocation?>(null) }
     var locating by remember { mutableStateOf(false) }
     var gpsMessage by remember { mutableStateOf<String?>(null) }
+    var ipLocation by remember { mutableStateOf<AppLocation?>(null) }
+    var ipLoading by remember { mutableStateOf(true) }
     val saved = remember { SettingsStore.get(context).location }
 
     LaunchedEffect(Unit) { cities = withContext(Dispatchers.IO) { Cities.all(context) } }
+    LaunchedEffect(Unit) {
+        ipLocation = withContext(Dispatchers.IO) { IpLocation.fetch() }
+        ipLoading = false
+    }
 
     fun choose(location: AppLocation) {
         SettingsStore.update(context) { it.copy(location = location) }
@@ -116,7 +127,7 @@ fun LocationScreen(firstRun: Boolean, onDone: () -> Unit) {
         else permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-    val reference = current ?: saved
+    val reference = current ?: ipLocation ?: saved
     val shown = remember(cities, query, reference) {
         val q = query.trim()
         when {
@@ -153,6 +164,23 @@ fun LocationScreen(firstRun: Boolean, onDone: () -> Unit) {
                         if (granted) ensureLocationOnThenLocate()
                         else permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }) { Icon(AppIcons.MyLocation, "Use GPS") }
+                }
+            }
+            if (ipLoading || ipLocation != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                        .clickable(enabled = ipLocation != null) { ipLocation?.let(::choose) },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.LocationOn, null, tint = MaterialTheme.colorScheme.secondary)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(ipLocation?.name ?: "Finding your area…", fontWeight = FontWeight.SemiBold)
+                            Text("Approximate, from your internet connection", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        if (ipLoading) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                    }
                 }
             }
             OutlinedTextField(

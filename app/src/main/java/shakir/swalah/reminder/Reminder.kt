@@ -33,7 +33,8 @@ enum class TimeBase {
  * rings before Friday's Fajr even if that is Thursday evening for a large offset.
  *
  * @param autoStopSeconds 0 = rings until dismissed (wake-up alarm), > 0 = stops after that many
- *        seconds, [PLAY_ONCE] = plays the sound one time (a full adhan) and stops.
+ *        seconds, [PLAY_ONCE] = plays the sound one time (a full adhan) and stops,
+ *        [PLAY_ONCE_THEN_SNOOZE] = plays it once with Snooze / Dismiss, and snoozes by itself if untouched.
  * @param preset built-in reminder this one was created from (see [Presets]); null for user-made ones.
  * @param scheduledAt the trigger currently armed in AlarmManager.
  * @param lastFiredAt trigger of the last occurrence that actually rang.
@@ -75,6 +76,12 @@ data class Reminder(
 
     /** Plays until dismissed, with snooze. */
     val isWakeUp: Boolean get() = autoStopSeconds == 0
+
+    /** Plays the sound one time instead of looping. */
+    val playsOnce: Boolean get() = autoStopSeconds == PLAY_ONCE || autoStopSeconds == PLAY_ONCE_THEN_SNOOZE
+
+    /** Has Snooze / Dismiss rather than a single Stop. */
+    val snoozable: Boolean get() = isWakeUp || autoStopSeconds == PLAY_ONCE_THEN_SNOOZE
 
     val exactDate: LocalDate? get() = if (hijri) null else date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
@@ -180,6 +187,7 @@ data class Reminder(
     companion object {
         const val EVERY_DAY = 0b1111111
         const val PLAY_ONCE = -1
+        const val PLAY_ONCE_THEN_SNOOZE = -2
         /** Hidden reminder used by the debug "Test" button. */
         const val TEST_ID = 999_999
 
