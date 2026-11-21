@@ -17,6 +17,9 @@ object AlarmHistory {
     private const val PREFS = "alarm_history"
     private const val KEY_ENTRIES = "entries"
     private const val KEY_SEQ = "seq"
+    /** Missed alarms the user hasn't been told about yet (the entries themselves go to the server). */
+    private const val KEY_UNSEEN_MISSED = "unseen_missed"
+    private const val KEY_NO_DIALOG = "no_missed_dialog"
     private const val MAX = 300
     const val ON_TIME_MS = 60_000L
 
@@ -48,8 +51,26 @@ object AlarmHistory {
             it.optInt("reminderId") == reminder.id && it.optLong("slot") == slot && it.optString("status") == MISSED
         }
         if (known) return
+        if (reminder.id != Reminder.TEST_ID) bumpUnseenMissed(context)
         add(context, entry(reminder, slot, MISSED))
         EventLog.log(context, "MISSED (never rang) reminder ${reminder.id} slot ${EventLog.time(slot)}")
+    }
+
+    /** Missed alarms not yet shown in the home dialog; 0 when there are none or it's turned off. */
+    fun unseenMissed(context: Context): Int {
+        val p = prefs(context)
+        return if (p.getBoolean(KEY_NO_DIALOG, false)) 0 else p.getInt(KEY_UNSEEN_MISSED, 0)
+    }
+
+    /** The dialog was shown; [never] = "Don't show again". */
+    fun markSeen(context: Context, never: Boolean) {
+        prefs(context).edit().putInt(KEY_UNSEEN_MISSED, 0)
+            .apply { if (never) putBoolean(KEY_NO_DIALOG, true) }.apply()
+    }
+
+    private fun bumpUnseenMissed(context: Context) {
+        val p = prefs(context)
+        p.edit().putInt(KEY_UNSEEN_MISSED, p.getInt(KEY_UNSEEN_MISSED, 0) + 1).apply()
     }
 
     /** Entries the server doesn't have yet, oldest first. */

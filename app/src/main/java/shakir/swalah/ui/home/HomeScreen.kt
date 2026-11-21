@@ -8,6 +8,13 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import shakir.swalah.alarm.AlarmHistory
+import kotlinx.coroutines.delay
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.core.content.ContextCompat
 
 import androidx.activity.compose.BackHandler
@@ -118,6 +125,20 @@ fun HomeScreen(
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    // Alarms that never rang since the last look: tell the user once they've stayed on Home for 5 s.
+    var missed by remember { mutableIntStateOf(0) }
+    LaunchedEffect(resumeTick) {
+        delay(5_000)
+        missed = AlarmHistory.unseenMissed(context)
+    }
+    if (missed > 0) {
+        MissedAlarmsDialog(
+            missed = missed,
+            onClose = { never -> AlarmHistory.markSeen(context, never); missed = 0 },
+            onOpenReminders = { never -> AlarmHistory.markSeen(context, never); missed = 0; onOpen(Routes.REMINDERS) },
+        )
     }
 
     // Like the old app: keep the screen on while an iqama countdown is running (e.g. a mosque display).
@@ -367,4 +388,31 @@ private fun SpeedDial(open: Boolean, onToggle: (Boolean) -> Unit, actions: List<
             }
         }
     }
+}
+
+@Composable
+private fun MissedAlarmsDialog(missed: Int, onClose: (never: Boolean) -> Unit, onOpenReminders: (never: Boolean) -> Unit) {
+    var never by remember { mutableStateOf(false) }
+    val what = "$missed alarm" + (if (missed > 1) "s" else "") + " didn't ring"
+    AlertDialog(
+        onDismissRequest = { onClose(never) },
+        icon = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error) },
+        title = { Text("Some alarms were missed") },
+        text = {
+            Column {
+                Text("$what. Your phone may be stopping the app in the background. Check the settings on the Reminders page so the adhan plays on time.")
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth().clickable { never = !never },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = never, onCheckedChange = null)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Don't show again")
+                }
+            }
+        },
+        confirmButton = { Button(onClick = { onOpenReminders(never) }) { Text("Check reminders") } },
+        dismissButton = { TextButton(onClick = { onClose(never) }) { Text("Close") } },
+    )
 }
